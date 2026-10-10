@@ -248,13 +248,13 @@
         searchArea: "この周辺で検索",
         currentLocation: "現在地周辺",
         customLocation: "指定エリア",
-        searching: "トイレを高速スキャン中...",
+        searching: "トイレをスキャン中...",
         locating: "GPS測位中...",
         found: (count, rad) => `半径${rad}に ${count} 件発見`,
         notFound: (query) => `「${query}」が見つかりませんでした。`,
         gpsDenied: "位置情報の取得が拒否されました",
         gpsUnsupported: "GPS非対応の端末です",
-        networkError: "データ取得に失敗しました",
+        networkError: "データ取得に失敗しました。再試行してください。",
         popupTitle: "公衆トイレ",
         wheelchair: "車椅子・多目的",
         yes: "あり",
@@ -286,7 +286,7 @@
         notFound: (query) => `Could not find "${query}".`,
         gpsDenied: "Location permission denied",
         gpsUnsupported: "Geolocation unsupported",
-        networkError: "Failed to fetch data",
+        networkError: "Failed to fetch data. Please try again.",
         popupTitle: "Public Restroom",
         wheelchair: "Accessible",
         yes: "Yes",
@@ -316,17 +316,15 @@
     let hasMovedManually = false;
     let abortController = null;
 
-    // 高速ミラーサーバーリスト
+    // CORS制限がなく確実に通るエンドポイント
     const OVERPASS_ENDPOINTS = [
-      'https://overpass.kumi.systems/api/interpreter',
       'https://overpass-api.de/api/interpreter',
-      'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.private.coffee/api/interpreter'
     ];
 
-    // メモリキャッシュ
     const toiletCache = new Map();
 
-    // 地図初期化
     const map = L.map('map', { 
       zoomControl: false,
       attributionControl: false 
@@ -340,7 +338,6 @@
     let searchCircle = null;
     let toiletLayerGroup = L.layerGroup().addTo(map);
 
-    // DOM参照
     const statusEl = document.getElementById('status');
     const targetLabelEl = document.getElementById('target-label');
     const searchForm = document.getElementById('search-form');
@@ -368,7 +365,6 @@
     const filterWheelchairText = document.getElementById('filter-wheelchair-text');
     const filterFreeText = document.getElementById('filter-free-text');
 
-    // 距離計算 (m)
     function calcDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const φ1 = lat1 * Math.PI / 180;
@@ -382,7 +378,6 @@
       return Math.round(R * c);
     }
 
-    // 言語適用
     function applyLanguage(lang) {
       currentLang = lang;
       const dict = I18N[lang];
@@ -404,7 +399,6 @@
       renderListView();
     }
 
-    // ビュー切り替え
     function setViewMode(mode) {
       activeView = mode;
       if (mode === 'map') {
@@ -420,7 +414,6 @@
       }
     }
 
-    // リスト描画
     function renderListView() {
       const dict = I18N[currentLang];
       toiletListCards.innerHTML = '';
@@ -541,7 +534,6 @@
       lucide.createIcons({ root: toiletListCards });
     }
 
-    // マーカー描画
     function renderToiletMarkers(elements, radius) {
       const dict = I18N[currentLang];
       const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
@@ -621,7 +613,7 @@
       renderListView();
     }
 
-    // ★ 並列同時リクエストによる最速取得処理
+    // 確実なフォールバック付き取得処理
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
@@ -641,34 +633,41 @@
       }
       abortController = new AbortController();
 
-      const query = `[out:json][timeout:5];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
+      // 標準クエリ (タイムアウト10秒)
+      const query = `[out:json][timeout:10];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
       const encodedBody = 'data=' + encodeURIComponent(query);
 
-      const requests = OVERPASS_ENDPOINTS.map(url =>
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: encodedBody,
-          signal: abortController.signal
-        }).then(async res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          return data.elements || [];
-        })
-      );
+      let success = false;
 
-      try {
-        const elements = await Promise.any(requests);
-        toiletCache.set(cacheKey, elements);
-        renderToiletMarkers(elements, radius);
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          statusEl.textContent = dict.networkError;
+      // 安定したサーバー順にフォールバックしながら試行
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: encodedBody,
+            signal: abortController.signal
+          });
+
+          if (!res.ok) continue;
+
+          const data = await res.json();
+          const elements = data.elements || [];
+
+          toiletCache.set(cacheKey, elements);
+          renderToiletMarkers(elements, radius);
+          success = true;
+          break; // 成功したら抜ける
+        } catch (err) {
+          if (err.name === 'AbortError') return;
         }
+      }
+
+      if (!success) {
+        statusEl.textContent = dict.networkError;
       }
     }
 
-    // 中心更新
     function updateCenter(lat, lng, labelText, isGPS = false) {
       currentCoords = { lat, lng };
       targetLabelEl.textContent = labelText;
@@ -705,7 +704,6 @@
       fetchToilets(lat, lng, currentRadius);
     }
 
-    // 画面移動検知
     map.on('movestart', () => { hasMovedManually = true; });
     map.on('moveend', () => {
       if (hasMovedManually && activeView === 'map') {
@@ -722,7 +720,6 @@
       hasMovedManually = false;
     });
 
-    // 半径変更
     radiusButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         radiusButtons.forEach(b => {
@@ -739,7 +736,6 @@
       });
     });
 
-    // 地名検索処理
     async function searchPlace(query) {
       if (!query.trim()) return;
       const dict = I18N[currentLang];
@@ -763,7 +759,6 @@
       }
     }
 
-    // GPS取得
     function locateUser() {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.locating;
@@ -781,7 +776,6 @@
       );
     }
 
-    // 検索フォーム送信イベント
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
       searchInput.blur();
@@ -801,7 +795,6 @@
       fetchToilets(currentCoords.lat, currentCoords.lng, currentRadius);
     });
 
-    // 起動
     lucide.createIcons();
     applyLanguage('ja');
     locateUser();
