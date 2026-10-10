@@ -248,7 +248,7 @@
         searchArea: "この周辺で検索",
         currentLocation: "現在地周辺",
         customLocation: "指定エリア",
-        searching: "トイレをスキャン中...",
+        searching: "トイレを高速スキャン中...",
         locating: "GPS測位中...",
         found: (count, rad) => `半径${rad}に ${count} 件発見`,
         notFound: (query) => `「${query}」が見つかりませんでした。`,
@@ -527,14 +527,15 @@
       lucide.createIcons({ root: toiletListCards });
     }
 
+    // node（点）と way（建物重心）の両方の座標を処理
     function renderToiletMarkers(elements, radius) {
       const dict = I18N[currentLang];
       const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
       statusEl.textContent = dict.found(elements.length, radiusStr);
 
       elements.forEach(item => {
-        const itemLat = item.lat;
-        const itemLng = item.lon;
+        const itemLat = item.lat || (item.center && item.center.lat);
+        const itemLng = item.lon || (item.center && item.center.lon);
         if (!itemLat || !itemLng) return;
 
         const toiletObj = {
@@ -606,7 +607,6 @@
       renderListView();
     }
 
-    // Vercel Serverless API経由 + 外部直接通信フォールバック
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
@@ -628,7 +628,6 @@
 
       let success = false;
 
-      // 1. まずVercelのプロキシAPI（api/toilets.js）を試行
       try {
         const res = await fetch(`/api/toilets?lat=${lat}&lng=${lng}&radius=${radius}`, {
           signal: abortController.signal
@@ -644,9 +643,16 @@
         if (err.name === 'AbortError') return;
       }
 
-      // 2. 万が一プロキシAPIが動かない場合のフォールバック（外部API直接通信）
+      // フォールバック直接通信
       if (!success) {
-        const query = `[out:json][timeout:15];node["amenity"="toilets"](around:${radius},${lat},${lng});out qt;`;
+        const query = `
+          [out:json][timeout:10];
+          (
+            node["amenity"="toilets"](around:${radius},${lat},${lng});
+            way["amenity"="toilets"](around:${radius},${lat},${lng});
+          );
+          out center qt;
+        `;
         const endpoints = [
           'https://overpass-api.de/api/interpreter',
           'https://lz4.overpass-api.de/api/interpreter',
@@ -657,8 +663,8 @@
           try {
             const res = await fetch(endpoint, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: 'data=' + encodeURIComponent(query),
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+              body: new URLSearchParams({ data: query }).toString(),
               signal: abortController.signal
             });
             if (!res.ok) continue;
