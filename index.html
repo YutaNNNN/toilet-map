@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>即トイレ MAP</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #map { height: 100vh; width: 100vw; z-index: 10; }
+  </style>
+</head>
+<body class="bg-neutral-900 text-neutral-100 overflow-hidden m-0 p-0 font-sans">
+
+  <!-- ヘッダーUI -->
+  <div class="fixed top-4 left-4 right-4 z-50 flex items-center justify-between gap-3 bg-neutral-900/90 backdrop-blur-md border border-neutral-800 p-3 rounded-2xl shadow-xl">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🚻</span>
+      <div>
+        <h1 class="text-sm font-bold text-neutral-100">即トイレ MAP</h1>
+        <p id="status" class="text-[10px] text-amber-400">現在地を取得中...</p>
+      </div>
+    </div>
+    
+    <button id="locate-btn" class="px-3.5 py-2 bg-amber-500 active:scale-95 text-neutral-950 font-bold text-xs rounded-xl shadow-md transition-all">
+      現在地を更新
+    </button>
+  </div>
+
+  <!-- マップ描画エリア -->
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // 地図の初期表示
+    const map = L.map('map', { zoomControl: false }).setView([35.6812, 139.7671], 15);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    let currentPosMarker = null;
+    let toiletLayerGroup = L.layerGroup().addTo(map);
+
+    // Overpass APIで周辺のトイレを取得
+    async function fetchToilets(lat, lng) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = '周辺1kmのトイレを検索中...';
+      toiletLayerGroup.clearLayers();
+
+      const query = `
+        [out:json][timeout:15];
+        (
+          node["amenity"="toilets"](around:1000, ${lat}, ${lng});
+          way["amenity"="toilets"](around:1000, ${lat}, ${lng});
+        );
+        out center;
+      `;
+
+      try {
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: query
+        });
+        const data = await res.json();
+        const elements = data.elements || [];
+
+        statusEl.textContent = `半径1kmに ${elements.length} 件見つかりました`;
+
+        elements.forEach(item => {
+          const itemLat = item.lat || (item.center && item.center.lat);
+          const itemLng = item.lon || (item.center && item.center.lon);
+          if (!itemLat || !itemLng) return;
+
+          const tags = item.tags || {};
+          const isWheelchair = tags.wheelchair === 'yes' ? 'あり（多目的）' : (tags.wheelchair === 'no' ? 'なし' : '不明');
+          const fee = tags.fee === 'yes' ? '有料' : '無料';
+
+          const marker = L.marker([itemLat, itemLng]);
+          marker.bindPopup(`
+            <div class="text-neutral-900 text-xs font-sans leading-relaxed">
+              <strong class="text-sm block mb-1">🚻 公衆トイレ</strong>
+              <div>車椅子/多目的: <strong>${isWheelchair}</strong></div>
+              <div>利用料: <strong>${fee}</strong></div>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=${itemLat},${itemLng}" 
+                 target="_blank" 
+                 class="mt-2.5 inline-block w-full text-center px-2 py-1.5 bg-amber-500 text-neutral-950 font-bold rounded-lg shadow">
+                Googleマップで経路案内
+              </a>
+            </div>
+          `);
+          toiletLayerGroup.addLayer(marker);
+        });
+      } catch (err) {
+        statusEl.textContent = 'データ取得に失敗しました';
+        console.error(err);
+      }
+    }
+
+    // GPS取得
+    function locateUser() {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'GPS取得中...';
+
+      if (!navigator.geolocation) {
+        statusEl.textContent = '位置情報に対応していません';
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+
+          map.setView([lat, lng], 16);
+
+          if (currentPosMarker) {
+            currentPosMarker.setLatLng([lat, lng]);
+          } else {
+            currentPosMarker = L.circleMarker([lat, lng], {
+              radius: 9,
+              fillColor: '#3b82f6',
+              color: '#ffffff',
+              weight: 2.5,
+              fillOpacity: 0.95
+            }).addTo(map).bindPopup("現在地");
+          }
+
+          fetchToilets(lat, lng);
+        },
+        (err) => {
+          statusEl.textContent = '位置情報の取得が許可されていません';
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    document.getElementById('locate-btn').addEventListener('click', locateUser);
+    locateUser();
+  </script>
+</body>
+</html>
