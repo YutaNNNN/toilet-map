@@ -527,7 +527,6 @@
       lucide.createIcons({ root: toiletListCards });
     }
 
-    // node（点）と way（建物重心）の両方の座標を処理
     function renderToiletMarkers(elements, radius) {
       const dict = I18N[currentLang];
       const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
@@ -643,7 +642,6 @@
         if (err.name === 'AbortError') return;
       }
 
-      // フォールバック直接通信
       if (!success) {
         const query = `
           [out:json][timeout:10];
@@ -771,6 +769,12 @@
 
         const item = data[0];
         hasMovedManually = false;
+
+        // ★ LISTを開いていた場合はMAP表示へ自動切り替え
+        if (activeView === 'list') {
+          setViewMode('map');
+        }
+
         updateCenter(parseFloat(item.lat), parseFloat(item.lon), item.display_name.split(',')[0], false);
       } catch (err) {
         statusEl.textContent = dict.networkError;
@@ -787,6 +791,12 @@
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           hasMovedManually = false;
+
+          // ★ LISTを開いていた場合はMAP表示へ自動切り替え
+          if (activeView === 'list') {
+            setViewMode('map');
+          }
+
           updateCenter(pos.coords.latitude, pos.coords.longitude, dict.currentLocation, true);
         },
         (err) => { statusEl.textContent = dict.gpsDenied; },
