@@ -3,101 +3,310 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>即トイレ MAP</title>
+  <title>RESTSTOP // Global Restroom Radar</title>
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts: Space Grotesk & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
   <style>
-    #map { height: 100vh; width: 100vw; z-index: 10; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: pan-x pan-y;
+    }
+    .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    #map {
+      height: 100vh;
+      width: 100vw;
+      background: #09090b;
+      z-index: 1;
+    }
+    /* ダークテーマ用マップタイルの反転・コントラスト調整 */
+    .dark-map-tiles {
+      filter: brightness(0.68) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.28) brightness(0.72);
+    }
+    /* カスタムポップアップスタイル */
+    .leaflet-popup-content-wrapper {
+      background: rgba(24, 24, 27, 0.94) !important;
+      backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(63, 63, 70, 0.8) !important;
+      color: #f4f4f5 !important;
+      border-radius: 1rem !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      line-height: 1.4 !important;
+    }
+    .leaflet-popup-tip {
+      background: rgba(24, 24, 27, 0.94) !important;
+      border: 1px solid rgba(63, 63, 70, 0.8) !important;
+    }
+    /* アニメーション */
+    @keyframes floatIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-float-in {
+      animation: floatIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes pulseRadar {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .radar-pulse {
+      animation: pulseRadar 3s ease-in-out infinite;
+    }
   </style>
 </head>
-<body class="bg-neutral-900 text-neutral-100 overflow-hidden m-0 p-0 font-sans">
+<body class="bg-zinc-950 text-zinc-100 overflow-hidden select-none m-0 p-0">
 
-  <!-- ヘッダー・操作パネル -->
-  <div class="fixed top-3 left-3 right-3 z-50 flex flex-col gap-2 bg-neutral-900/95 backdrop-blur-md border border-neutral-800 p-3 rounded-2xl shadow-2xl">
+  <!-- =============================== -->
+  <!-- トップフローティングコントロール -->
+  <!-- =============================== -->
+  <header class="fixed top-3 inset-x-3 sm:inset-x-auto sm:left-4 sm:right-4 sm:max-w-md sm:mx-auto z-40 flex flex-col gap-2 pointer-events-none">
     
-    <!-- 検索バー ＆ 現在地ボタン -->
-    <form id="search-form" class="flex gap-2">
-      <div class="relative flex-1">
-        <input 
-          id="search-input" 
-          type="text" 
-          placeholder="駅名・地名を入力 (例: 新宿駅, 鎌ヶ谷駅)" 
-          class="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-400"
-        />
-      </div>
-      <button 
-        type="submit" 
-        class="px-3.5 py-2 bg-amber-500 active:scale-95 text-neutral-950 font-bold text-xs rounded-xl shadow transition-all whitespace-nowrap"
-      >
-        検索
-      </button>
-      <button 
-        type="button" 
-        id="locate-btn" 
-        class="px-3 py-2 bg-neutral-800 border border-neutral-700 active:scale-95 text-neutral-200 text-xs rounded-xl shadow transition-all whitespace-nowrap flex items-center gap-1"
-        title="現在地に戻る"
-      >
-        📍 現在地
-      </button>
-    </form>
+    <!-- メイン操作カード -->
+    <div class="pointer-events-auto bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/80 p-3 rounded-2xl shadow-2xl shadow-black/80 flex flex-col gap-2.5 transition-all duration-200">
+      
+      <!-- タイトル ＆ 言語トグル -->
+      <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-zinc-950 shadow-md shadow-amber-500/20">
+            <i data-lucide="map-pin" class="w-4 h-4 stroke-[2.5]"></i>
+          </div>
+          <div>
+            <h1 class="font-display text-xs tracking-wider font-bold text-zinc-100 flex items-center gap-1.5">
+              <span>RESTSTOP</span>
+              <span class="text-[9px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-amber-400 border border-zinc-700/60 tracking-normal">RADAR</span>
+            </h1>
+          </div>
+        </div>
 
-    <!-- 検索距離の選択チップ -->
-    <div class="flex items-center justify-between gap-1 pt-1 border-t border-neutral-800/80">
-      <span class="text-[11px] text-neutral-400 font-medium whitespace-nowrap mr-1">検索半径:</span>
-      <div class="grid grid-cols-4 gap-1.5 flex-1" id="radius-selector">
-        <button type="button" data-radius="300" data-zoom="17" class="radius-btn py-1 text-xs rounded-lg font-semibold border transition-all text-neutral-400 border-neutral-800 bg-neutral-950 hover:border-neutral-700">
-          300m
-        </button>
-        <button type="button" data-radius="500" data-zoom="16" class="radius-btn py-1 text-xs rounded-lg font-semibold border transition-all text-neutral-400 border-neutral-800 bg-neutral-950 hover:border-neutral-700">
-          500m
-        </button>
-        <button type="button" data-radius="1000" data-zoom="15" class="radius-btn active py-1 text-xs rounded-lg font-semibold border transition-all bg-amber-500 text-neutral-950 border-amber-400 shadow">
-          1km
-        </button>
-        <button type="button" data-radius="2000" data-zoom="14" class="radius-btn py-1 text-xs rounded-lg font-semibold border transition-all text-neutral-400 border-neutral-800 bg-neutral-950 hover:border-neutral-700">
-          2km
-        </button>
+        <div class="flex items-center gap-1.5">
+          <!-- 言語切り替えトグル -->
+          <button 
+            id="lang-toggle-btn"
+            type="button" 
+            class="px-2 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 text-[10px] font-bold tracking-wider transition-colors flex items-center gap-1"
+          >
+            <i data-lucide="globe" class="w-3 h-3 text-zinc-400"></i>
+            <span id="lang-label">EN</span>
+          </button>
+        </div>
       </div>
+
+      <!-- 検索入力バー -->
+      <form id="search-form" class="flex gap-1.5">
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input 
+            id="search-input" 
+            type="text" 
+            placeholder="Search worldwide (e.g. Shibuya, Central Park)..." 
+            class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
+          />
+        </div>
+        <button 
+          type="submit" 
+          id="search-submit-btn"
+          class="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-zinc-950 font-bold text-xs rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center justify-center whitespace-nowrap"
+        >
+          <span>検索</span>
+        </button>
+      </form>
+
+      <!-- 半径フィルターセレクター -->
+      <div class="flex items-center gap-1.5 pt-1 border-t border-zinc-800/60">
+        <span id="radius-label" class="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider pl-1">Range:</span>
+        <div class="grid grid-cols-4 gap-1.5 flex-1" id="radius-btn-group">
+          <button type="button" data-radius="300" data-zoom="17" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+            300m
+          </button>
+          <button type="button" data-radius="500" data-zoom="16" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+            500m
+          </button>
+          <button type="button" data-radius="1000" data-zoom="15" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md shadow-amber-500/20">
+            1km
+          </button>
+          <button type="button" data-radius="2000" data-zoom="14" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+            2km
+          </button>
+        </div>
+      </div>
+
     </div>
 
-    <!-- ステータス・件数表示 -->
-    <div class="flex items-center justify-between px-1 text-[11px] text-neutral-400">
-      <span id="target-label" class="font-medium text-neutral-200 truncate max-w-[200px]">現在地周辺</span>
-      <span id="status" class="text-amber-400">取得中...</span>
+    <!-- ステータスバッジ（位置情報・件数インジケーター） -->
+    <div class="pointer-events-auto flex items-center justify-between px-3 py-1.5 rounded-xl bg-zinc-900/70 backdrop-blur-md border border-zinc-800/60 text-[11px] text-zinc-400 shadow-lg">
+      <div class="flex items-center gap-1.5 truncate pr-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="target-label" class="text-zinc-200 font-semibold truncate">Current Location</span>
+      </div>
+      <span id="status" class="text-amber-400 font-medium whitespace-nowrap text-[10px]">Ready</span>
     </div>
+
+    <!-- ★ 画面移動時に表示される「このエリアで再検索」フローティングボタン -->
+    <div id="search-area-container" class="pointer-events-auto flex justify-center hidden">
+      <button 
+        id="search-area-btn"
+        class="animate-float-in px-4 py-2 rounded-full bg-zinc-900/90 hover:bg-zinc-850 active:scale-95 text-amber-400 hover:text-amber-300 font-bold text-xs tracking-wide border border-amber-400/50 shadow-2xl shadow-black backdrop-blur-lg flex items-center gap-2 transition-all cursor-pointer"
+      >
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        <span id="search-area-text">この周辺で検索</span>
+      </button>
+    </div>
+
+  </header>
+
+  <!-- =============================== -->
+  <!-- フローティング右下アクションボタン群 -->
+  <!-- =============================== -->
+  <div class="fixed bottom-6 right-4 z-40 flex flex-col gap-2.5">
+    <!-- 現在地へジャンプボタン -->
+    <button 
+      id="locate-btn"
+      type="button"
+      class="w-12 h-12 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 active:scale-95 text-zinc-200 border border-zinc-700/80 shadow-2xl shadow-black/80 backdrop-blur-md flex items-center justify-center transition-all group"
+      title="現在地を測位"
+    >
+      <i data-lucide="crosshair" class="w-5 h-5 text-amber-400 group-hover:rotate-45 transition-transform"></i>
+    </button>
   </div>
 
-  <!-- マップエリア -->
+  <!-- マップキャンバス -->
   <div id="map"></div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    let currentRadius = 1000; // デフォルト 1000m
-    let currentZoom = 15;
-    let currentCoords = { lat: 35.6812, lng: 139.7671 }; // 基準地点
-    let currentLabel = "現在地";
 
-    const map = L.map('map', { zoomControl: false }).setView([currentCoords.lat, currentCoords.lng], currentZoom);
-    
+  <script>
+    // ==========================================
+    // 多言語辞書 (i18n)
+    // ==========================================
+    const I18N = {
+      ja: {
+        langToggle: "EN",
+        placeholder: "世界中の駅名・地名を入力 (例: 渋谷駅, Central Park)...",
+        searchBtn: "検索",
+        rangeLabel: "半径:",
+        searchArea: "この周辺で検索",
+        currentLocation: "現在地周辺",
+        customLocation: "指定エリア",
+        searching: "トイレをスキャン中...",
+        locating: "GPS測位中...",
+        found: (count, rad) => `半径${rad}に ${count} 件発見`,
+        notFound: (query) => `「${query}」が見つかりませんでした。地名や都市名をご確認ください。`,
+        gpsDenied: "位置情報の取得が拒否されました",
+        gpsUnsupported: "GPS非対応の端末です",
+        networkError: "データ取得に失敗しました",
+        popupTitle: "公衆トイレ",
+        wheelchair: "車椅子・多目的",
+        yes: "あり",
+        no: "なし",
+        unknown: "不明",
+        fee: "利用料",
+        free: "無料",
+        paid: "有料",
+        navigate: "ルート案内 (Google Maps)"
+      },
+      en: {
+        langToggle: "JP",
+        placeholder: "Search globally (e.g. Times Square, King's Cross)...",
+        searchBtn: "Search",
+        rangeLabel: "Radius:",
+        searchArea: "Search this area",
+        currentLocation: "Current Location",
+        customLocation: "Custom Area",
+        searching: "Scanning restrooms...",
+        locating: "Acquiring GPS...",
+        found: (count, rad) => `${count} restrooms in ${rad}`,
+        notFound: (query) => `Could not find "${query}". Please check the place name.`,
+        gpsDenied: "Location permission denied",
+        gpsUnsupported: "Geolocation unsupported",
+        networkError: "Failed to fetch data",
+        popupTitle: "Public Restroom",
+        wheelchair: "Accessible",
+        yes: "Yes",
+        no: "No",
+        unknown: "Unknown",
+        fee: "Fee",
+        free: "Free",
+        paid: "Paid",
+        navigate: "Directions (Google Maps)"
+      }
+    };
+
+    let currentLang = 'ja';
+    let currentRadius = 1000;
+    let currentZoom = 15;
+    let currentCoords = { lat: 35.6812, lng: 139.7671 }; // 初期: 東京
+    let hasMovedManually = false;
+
+    // 地図初期化
+    const map = L.map('map', { 
+      zoomControl: false,
+      attributionControl: false 
+    }).setView([currentCoords.lat, currentCoords.lng], currentZoom);
+
+    // ダーク調タイルレイヤー
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
+      className: 'dark-map-tiles',
       maxZoom: 19
     }).addTo(map);
 
     let centerMarker = null;
-    let searchCircle = null; // 検索範囲を可視化する円
+    let searchCircle = null;
     let toiletLayerGroup = L.layerGroup().addTo(map);
 
+    // DOM要素
     const statusEl = document.getElementById('status');
     const targetLabelEl = document.getElementById('target-label');
     const searchForm = document.getElementById('search-form');
     const searchInput = document.getElementById('search-input');
+    const searchSubmitBtn = document.getElementById('search-submit-btn');
+    const radiusLabel = document.getElementById('radius-label');
     const radiusButtons = document.querySelectorAll('.radius-btn');
+    const searchAreaContainer = document.getElementById('search-area-container');
+    const searchAreaBtn = document.getElementById('search-area-btn');
+    const searchAreaText = document.getElementById('search-area-text');
+    const langToggleBtn = document.getElementById('lang-toggle-btn');
+    const langLabel = document.getElementById('lang-label');
+    const locateBtn = document.getElementById('locate-btn');
 
-    // トイレデータの取得
+    // UI言語更新
+    function applyLanguage(lang) {
+      currentLang = lang;
+      const dict = I18N[lang];
+      langLabel.textContent = dict.langToggle;
+      searchInput.placeholder = dict.placeholder;
+      searchSubmitBtn.querySelector('span').textContent = dict.searchBtn;
+      radiusLabel.textContent = dict.rangeLabel;
+      searchAreaText.textContent = dict.searchArea;
+      if (centerMarker && centerMarker._isGPS) {
+        targetLabelEl.textContent = dict.currentLocation;
+      }
+      lucide.createIcons();
+    }
+
+    // Overpass APIからトイレ取得（全世界対応）
     async function fetchToilets(lat, lng, radius) {
-      statusEl.textContent = `${radius >= 1000 ? (radius / 1000) + 'km' : radius + 'm'} 以内を検索中...`;
+      const dict = I18N[currentLang];
+      statusEl.textContent = dict.searching;
       toiletLayerGroup.clearLayers();
+      searchAreaContainer.classList.add('hidden'); // 検索完了したらエリア検索ボタンは隠す
 
       const query = `
         [out:json][timeout:15];
@@ -117,7 +326,7 @@
         const elements = data.elements || [];
 
         const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
-        statusEl.textContent = `半径${radiusStr}に ${elements.length} 件`;
+        statusEl.textContent = dict.found(elements.length, radiusStr);
 
         elements.forEach(item => {
           const itemLat = item.lat || (item.center && item.center.lat);
@@ -125,40 +334,71 @@
           if (!itemLat || !itemLng) return;
 
           const tags = item.tags || {};
-          const isWheelchair = tags.wheelchair === 'yes' ? 'あり（多目的）' : (tags.wheelchair === 'no' ? 'なし' : '不明');
-          const fee = tags.fee === 'yes' ? '有料' : '無料';
+          let isWheelchair = dict.unknown;
+          if (tags.wheelchair === 'yes') isWheelchair = dict.yes;
+          else if (tags.wheelchair === 'no') isWheelchair = dict.no;
 
-          const marker = L.marker([itemLat, itemLng]);
+          const fee = tags.fee === 'yes' ? dict.paid : (tags.fee === 'no' ? dict.free : dict.free);
+
+          // 高級感のあるカスタムピン（HTMLマーカー）
+          const customIcon = L.divIcon({
+            className: 'custom-toilet-icon',
+            html: `
+              <div class="w-8 h-8 rounded-full bg-zinc-900 border-2 border-amber-400 flex items-center justify-center shadow-lg shadow-black/80 hover:scale-110 active:scale-95 transition-transform">
+                <span class="text-sm">🚻</span>
+              </div>
+            `,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+          });
+
+          const marker = L.marker([itemLat, itemLng], { icon: customIcon });
+
           marker.bindPopup(`
-            <div class="text-neutral-900 text-xs font-sans leading-relaxed">
-              <strong class="text-sm block mb-1">🚻 公衆トイレ</strong>
-              <div>多目的/車椅子: <strong>${isWheelchair}</strong></div>
-              <div>利用料: <strong>${fee}</strong></div>
+            <div class="p-4 flex flex-col gap-2.5 min-w-[210px]">
+              <div class="flex items-center gap-2 border-b border-zinc-800 pb-2">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs border border-amber-500/30">
+                  🚻
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-zinc-100">${tags.name || dict.popupTitle}</h4>
+                  <p class="text-[10px] text-zinc-400">${fee}</p>
+                </div>
+              </div>
+
+              <div class="text-[11px] space-y-1 text-zinc-300">
+                <div class="flex justify-between">
+                  <span class="text-zinc-500">${dict.wheelchair}:</span>
+                  <span class="font-semibold text-zinc-200">${isWheelchair}</span>
+                </div>
+              </div>
+
               <a href="https://www.google.com/maps/dir/?api=1&destination=${itemLat},${itemLng}" 
                  target="_blank" 
-                 class="mt-2.5 inline-block w-full text-center px-2 py-1.5 bg-amber-500 text-neutral-950 font-bold rounded-lg shadow">
-                Googleマップで経路案内
+                 class="mt-1 flex items-center justify-center gap-1.5 w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-[11px] rounded-xl shadow-md shadow-amber-500/20 transition-all">
+                <span>${dict.navigate}</span>
               </a>
             </div>
           `);
+
           toiletLayerGroup.addLayer(marker);
         });
 
       } catch (err) {
-        statusEl.textContent = 'データ取得に失敗しました';
+        statusEl.textContent = dict.networkError;
         console.error(err);
       }
     }
 
-    // 検索中心地点と範囲円の更新
+    // 中心座標・サークルの再描画
     function updateCenter(lat, lng, labelText, isGPS = false) {
       currentCoords = { lat, lng };
-      currentLabel = labelText;
       targetLabelEl.textContent = labelText;
 
       map.setView([lat, lng], currentZoom);
 
-      // 中心ピン
+      // 中心マーカー
       if (centerMarker) {
         centerMarker.setLatLng([lat, lng]);
       } else {
@@ -170,9 +410,10 @@
           fillOpacity: 0.95
         }).addTo(map);
       }
+      centerMarker._isGPS = isGPS;
       centerMarker.setStyle({ fillColor: isGPS ? '#3b82f6' : '#ef4444' });
 
-      // 検索範囲を示す薄いサークル
+      // 範囲レーダー円
       if (searchCircle) {
         searchCircle.setLatLng([lat, lng]).setRadius(currentRadius);
       } else {
@@ -189,13 +430,37 @@
       fetchToilets(lat, lng, currentRadius);
     }
 
-    // 距離ボタンの切り替え処理
+    // ★ 地図移動イベント：ユーザーが地図を動かしたら「この周辺で検索」ボタンを表示
+    map.on('movestart', () => {
+      hasMovedManually = true;
+    });
+
+    map.on('moveend', () => {
+      if (hasMovedManually) {
+        const center = map.getCenter();
+        const dist = map.distance([currentCoords.lat, currentCoords.lng], center);
+        // 現在の検索中心から150m以上移動していたらボタンを表示
+        if (dist > 150) {
+          searchAreaContainer.classList.remove('hidden');
+        }
+      }
+    });
+
+    // 「この周辺で検索」ボタンの実行
+    searchAreaBtn.addEventListener('click', () => {
+      const center = map.getCenter();
+      const dict = I18N[currentLang];
+      updateCenter(center.lat, center.lng, dict.customLocation, false);
+      hasMovedManually = false;
+    });
+
+    // 半径切り替え
     radiusButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         radiusButtons.forEach(b => {
-          b.className = 'radius-btn py-1 text-xs rounded-lg font-semibold border transition-all text-neutral-400 border-neutral-800 bg-neutral-950 hover:border-neutral-700';
+          b.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200';
         });
-        btn.className = 'radius-btn active py-1 text-xs rounded-lg font-semibold border transition-all bg-amber-500 text-neutral-950 border-amber-400 shadow';
+        btn.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md shadow-amber-500/20';
 
         currentRadius = parseInt(btn.dataset.radius);
         currentZoom = parseInt(btn.dataset.zoom);
@@ -206,18 +471,19 @@
       });
     });
 
-    // 駅・地名の検索 (Nominatim)
+    // 世界地名検索 (Nominatim: countrycodesの制限なし)
     async function searchPlace(query) {
       if (!query.trim()) return;
-      statusEl.textContent = '場所を特定中...';
+      const dict = I18N[currentLang];
+      statusEl.textContent = dict.searching;
 
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
       try {
-        const res = await fetch(url, { headers: { 'Accept-Language': 'ja' } });
+        const res = await fetch(url, { headers: { 'Accept-Language': currentLang } });
         const data = await res.json();
         if (data.length === 0) {
-          statusEl.textContent = '見つかりませんでした';
-          alert(`「${query}」が見つかりませんでした。駅名や市町村名を加えて再度お試しください。`);
+          alert(dict.notFound(query));
+          statusEl.textContent = "Not found";
           return;
         }
 
@@ -226,41 +492,54 @@
         const lng = parseFloat(item.lon);
         const displayName = item.display_name.split(',')[0];
 
+        hasMovedManually = false;
         updateCenter(lat, lng, displayName, false);
       } catch (err) {
-        statusEl.textContent = '検索エラーが発生しました';
+        statusEl.textContent = dict.networkError;
         console.error(err);
       }
     }
 
-    // GPS取得
+    // GPS測位
     function locateUser() {
-      statusEl.textContent = 'GPS取得中...';
+      const dict = I18N[currentLang];
+      statusEl.textContent = dict.locating;
+
       if (!navigator.geolocation) {
-        statusEl.textContent = 'GPS非対応';
+        statusEl.textContent = dict.gpsUnsupported;
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          updateCenter(pos.coords.latitude, pos.coords.longitude, "現在地", true);
+          hasMovedManually = false;
+          updateCenter(pos.coords.latitude, pos.coords.longitude, dict.currentLocation, true);
         },
         (err) => {
-          statusEl.textContent = '位置情報の取得が拒否されました';
+          statusEl.textContent = dict.gpsDenied;
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
 
+    // イベントバインド
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const val = searchInput.value.trim();
       if (val) searchPlace(val);
     });
 
-    document.getElementById('locate-btn').addEventListener('click', locateUser);
+    locateBtn.addEventListener('click', locateUser);
 
-    // 初回起動
+    langToggleBtn.addEventListener('click', () => {
+      applyLanguage(currentLang === 'ja' ? 'en' : 'ja');
+      // 再描画
+      fetchToilets(currentCoords.lat, currentCoords.lng, currentRadius);
+    });
+
+    // 初期起動
+    lucide.createIcons();
+    applyLanguage('ja');
     locateUser();
   </script>
 </body>
