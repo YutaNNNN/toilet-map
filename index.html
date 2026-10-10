@@ -248,7 +248,7 @@
         searchArea: "この周辺で検索",
         currentLocation: "現在地周辺",
         customLocation: "指定エリア",
-        searching: "トイレをスキャン中...",
+        searching: "トイレを高速スキャン中...",
         locating: "GPS測位中...",
         found: (count, rad) => `半径${rad}に ${count} 件発見`,
         notFound: (query) => `「${query}」が見つかりませんでした。`,
@@ -316,7 +316,7 @@
     let hasMovedManually = false;
     let abortController = null;
 
-    // 高速サーバー優先リスト
+    // 高速ミラーサーバーリスト
     const OVERPASS_ENDPOINTS = [
       'https://overpass.kumi.systems/api/interpreter',
       'https://overpass-api.de/api/interpreter',
@@ -621,7 +621,7 @@
       renderListView();
     }
 
-    // 高速化版トイレ取得
+    // ★ 並列同時リクエストによる最速取得処理
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
@@ -641,40 +641,30 @@
       }
       abortController = new AbortController();
 
-      const query = `
-        [out:json][timeout:8];
-        node["amenity"="toilets"](around:${radius}, ${lat}, ${lng});
-        out qt;
-      `;
+      const query = `[out:json][timeout:5];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
+      const encodedBody = 'data=' + encodeURIComponent(query);
 
-      let success = false;
-
-      for (const endpoint of OVERPASS_ENDPOINTS) {
-        try {
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'data=' + encodeURIComponent(query),
-            signal: abortController.signal
-          });
-
-          if (!res.ok) continue;
-
+      const requests = OVERPASS_ENDPOINTS.map(url =>
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: encodedBody,
+          signal: abortController.signal
+        }).then(async res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          const elements = data.elements || [];
+          return data.elements || [];
+        })
+      );
 
-          toiletCache.set(cacheKey, elements);
-          renderToiletMarkers(elements, radius);
-          success = true;
-          break;
-
-        } catch (err) {
-          if (err.name === 'AbortError') return;
+      try {
+        const elements = await Promise.any(requests);
+        toiletCache.set(cacheKey, elements);
+        renderToiletMarkers(elements, radius);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          statusEl.textContent = dict.networkError;
         }
-      }
-
-      if (!success) {
-        statusEl.textContent = dict.networkError;
       }
     }
 
