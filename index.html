@@ -316,13 +316,6 @@
     let hasMovedManually = false;
     let abortController = null;
 
-    // 稼働実績の高いパブリックエンドポイント一覧
-    const OVERPASS_ENDPOINTS = [
-      'https://overpass-api.de/api/interpreter',
-      'https://lz4.overpass-api.de/api/interpreter',
-      'https://z.overpass-api.de/api/interpreter'
-    ];
-
     const toiletCache = new Map();
 
     const map = L.map('map', { 
@@ -613,45 +606,79 @@
       renderListView();
     }
 
-    // GETリクエスト＋安全リトライ処理
+    // Vercel Serverless API経由 + 外部直接通信フォールバック
     async function fetchToilets(lat, lng, radius) {
-  const dict = I18N[currentLang];
-  statusEl.textContent = dict.searching;
-  toiletLayerGroup.clearLayers();
-  markersMap = {};
-  rawToiletsData = [];
-  searchAreaContainer.classList.add('hidden');
+      const dict = I18N[currentLang];
+      statusEl.textContent = dict.searching;
+      toiletLayerGroup.clearLayers();
+      markersMap = {};
+      rawToiletsData = [];
+      searchAreaContainer.classList.add('hidden');
 
-  const cacheKey = `${lat.toFixed(3)}_${lng.toFixed(3)}_${radius}`;
-  if (toiletCache.has(cacheKey)) {
-    renderToiletMarkers(toiletCache.get(cacheKey), radius);
-    return;
-  }
+      const cacheKey = `${lat.toFixed(3)}_${lng.toFixed(3)}_${radius}`;
+      if (toiletCache.has(cacheKey)) {
+        renderToiletMarkers(toiletCache.get(cacheKey), radius);
+        return;
+      }
 
-  if (abortController) {
-    abortController.abort();
-  }
-  abortController = new AbortController();
+      if (abortController) {
+        abortController.abort();
+      }
+      abortController = new AbortController();
 
-  try {
-    // 自前のVercel APIを経由して取得（CORS・ブロック完全回避）
-    const res = await fetch(`/api/toilets?lat=${lat}&lng=${lng}&radius=${radius}`, {
-      signal: abortController.signal
-    });
+      let success = false;
 
-    if (!res.ok) throw new Error('API failed');
+      // 1. まずVercelのプロキシAPI（api/toilets.js）を試行
+      try {
+        const res = await fetch(`/api/toilets?lat=${lat}&lng=${lng}&radius=${radius}`, {
+          signal: abortController.signal
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const elements = data.elements || [];
+          toiletCache.set(cacheKey, elements);
+          renderToiletMarkers(elements, radius);
+          success = true;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
 
-    const data = await res.json();
-    const elements = data.elements || [];
+      // 2. 万が一プロキシAPIが動かない場合のフォールバック（外部API直接通信）
+      if (!success) {
+        const query = `[out:json][timeout:15];node["amenity"="toilets"](around:${radius},${lat},${lng});out qt;`;
+        const endpoints = [
+          'https://overpass-api.de/api/interpreter',
+          'https://lz4.overpass-api.de/api/interpreter',
+          'https://overpass.kumi.systems/api/interpreter'
+        ];
 
-    toiletCache.set(cacheKey, elements);
-    renderToiletMarkers(elements, radius);
-  } catch (err) {
-    if (err.name === 'AbortError') return;
-    statusEl.textContent = dict.networkError;
-    console.error(err);
-  }
-}
+        for (const endpoint of endpoints) {
+          try {
+            const res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'data=' + encodeURIComponent(query),
+              signal: abortController.signal
+            });
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            const elements = data.elements || [];
+            toiletCache.set(cacheKey, elements);
+            renderToiletMarkers(elements, radius);
+            success = true;
+            break;
+          } catch (err) {
+            if (err.name === 'AbortError') return;
+          }
+        }
+      }
+
+      if (!success) {
+        statusEl.textContent = dict.networkError;
+      }
+    }
 
     function updateCenter(lat, lng, labelText, isGPS = false) {
       currentCoords = { lat, lng };
