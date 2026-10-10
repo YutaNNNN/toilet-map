@@ -30,30 +30,24 @@
       background: #09090b;
       z-index: 1;
     }
-    /* ダークテーマ用マップタイルの反転・コントラスト調整 */
     .dark-map-tiles {
       filter: brightness(0.68) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.28) brightness(0.72);
     }
-    /* カスタムポップアップスタイル */
     .leaflet-popup-content-wrapper {
-      background: rgba(24, 24, 27, 0.94) !important;
+      background: rgba(24, 24, 27, 0.95) !important;
       backdrop-filter: blur(12px) !important;
       border: 1px solid rgba(63, 63, 70, 0.8) !important;
       color: #f4f4f5 !important;
       border-radius: 1rem !important;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6) !important;
       padding: 0 !important;
       overflow: hidden;
     }
-    .leaflet-popup-content {
-      margin: 0 !important;
-      line-height: 1.4 !important;
-    }
+    .leaflet-popup-content { margin: 0 !important; }
     .leaflet-popup-tip {
-      background: rgba(24, 24, 27, 0.94) !important;
+      background: rgba(24, 24, 27, 0.95) !important;
       border: 1px solid rgba(63, 63, 70, 0.8) !important;
     }
-    /* アニメーション */
     @keyframes floatIn {
       from { opacity: 0; transform: translateY(-8px) scale(0.96); }
       to { opacity: 1; transform: translateY(0) scale(1); }
@@ -61,27 +55,19 @@
     .animate-float-in {
       animation: floatIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-    @keyframes pulseRadar {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.3; }
-      100% { transform: scale(0.95); opacity: 0.8; }
-    }
-    .radar-pulse {
-      animation: pulseRadar 3s ease-in-out infinite;
-    }
   </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 overflow-hidden select-none m-0 p-0">
 
   <!-- =============================== -->
-  <!-- トップフローティングコントロール -->
+  <!-- トップ操作ヘッダー -->
   <!-- =============================== -->
   <header class="fixed top-3 inset-x-3 sm:inset-x-auto sm:left-4 sm:right-4 sm:max-w-md sm:mx-auto z-40 flex flex-col gap-2 pointer-events-none">
     
-    <!-- メイン操作カード -->
-    <div class="pointer-events-auto bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/80 p-3 rounded-2xl shadow-2xl shadow-black/80 flex flex-col gap-2.5 transition-all duration-200">
+    <!-- 操作カード -->
+    <div class="pointer-events-auto bg-zinc-900/85 backdrop-blur-xl border border-zinc-800/80 p-3 rounded-2xl shadow-2xl shadow-black/80 flex flex-col gap-2.5">
       
-      <!-- タイトル ＆ 言語トグル -->
+      <!-- タイトル & ビュー切替 & 言語トグル -->
       <div class="flex items-center justify-between px-1">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-zinc-950 shadow-md shadow-amber-500/20">
@@ -90,17 +76,37 @@
           <div>
             <h1 class="font-display text-xs tracking-wider font-bold text-zinc-100 flex items-center gap-1.5">
               <span>RESTSTOP</span>
-              <span class="text-[9px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-amber-400 border border-zinc-700/60 tracking-normal">RADAR</span>
+              <span class="text-[9px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-amber-400 border border-zinc-700/60">RADAR</span>
             </h1>
           </div>
         </div>
 
         <div class="flex items-center gap-1.5">
-          <!-- 言語切り替えトグル -->
+          <!-- ★ マップ / リスト 切り替えスイッチ -->
+          <div class="bg-zinc-950 p-0.5 rounded-xl border border-zinc-800 flex items-center">
+            <button 
+              id="view-map-btn"
+              type="button" 
+              class="px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all bg-amber-500 text-zinc-950 shadow"
+            >
+              <i data-lucide="map" class="w-3 h-3"></i>
+              <span id="tab-map-text">MAP</span>
+            </button>
+            <button 
+              id="view-list-btn"
+              type="button" 
+              class="px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all text-zinc-400 hover:text-zinc-200"
+            >
+              <i data-lucide="list" class="w-3 h-3"></i>
+              <span id="tab-list-text">LIST</span>
+            </button>
+          </div>
+
+          <!-- 言語トグル -->
           <button 
             id="lang-toggle-btn"
             type="button" 
-            class="px-2 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 text-[10px] font-bold tracking-wider transition-colors flex items-center gap-1"
+            class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 text-[10px] font-bold tracking-wider transition-colors flex items-center gap-1"
           >
             <i data-lucide="globe" class="w-3 h-3 text-zinc-400"></i>
             <span id="lang-label">EN</span>
@@ -108,14 +114,14 @@
         </div>
       </div>
 
-      <!-- 検索入力バー -->
+      <!-- 検索バー -->
       <form id="search-form" class="flex gap-1.5">
         <div class="relative flex-1">
           <i data-lucide="search" class="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
           <input 
             id="search-input" 
             type="text" 
-            placeholder="Search worldwide (e.g. Shibuya, Central Park)..." 
+            placeholder="Search worldwide..." 
             class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
           />
         </div>
@@ -128,20 +134,20 @@
         </button>
       </form>
 
-      <!-- 半径フィルターセレクター -->
+      <!-- 半径フィルター -->
       <div class="flex items-center gap-1.5 pt-1 border-t border-zinc-800/60">
         <span id="radius-label" class="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider pl-1">Range:</span>
         <div class="grid grid-cols-4 gap-1.5 flex-1" id="radius-btn-group">
-          <button type="button" data-radius="300" data-zoom="17" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+          <button type="button" data-radius="300" data-zoom="17" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60">
             300m
           </button>
-          <button type="button" data-radius="500" data-zoom="16" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+          <button type="button" data-radius="500" data-zoom="16" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60">
             500m
           </button>
-          <button type="button" data-radius="1000" data-zoom="15" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md shadow-amber-500/20">
+          <button type="button" data-radius="1000" data-zoom="15" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md">
             1km
           </button>
-          <button type="button" data-radius="2000" data-zoom="14" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200">
+          <button type="button" data-radius="2000" data-zoom="14" class="radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60">
             2km
           </button>
         </div>
@@ -149,7 +155,7 @@
 
     </div>
 
-    <!-- ステータスバッジ（位置情報・件数インジケーター） -->
+    <!-- ステータスバッジ -->
     <div class="pointer-events-auto flex items-center justify-between px-3 py-1.5 rounded-xl bg-zinc-900/70 backdrop-blur-md border border-zinc-800/60 text-[11px] text-zinc-400 shadow-lg">
       <div class="flex items-center gap-1.5 truncate pr-2">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -158,7 +164,7 @@
       <span id="status" class="text-amber-400 font-medium whitespace-nowrap text-[10px]">Ready</span>
     </div>
 
-    <!-- ★ 画面移動時に表示される「このエリアで再検索」フローティングボタン -->
+    <!-- 画面移動時の「この周辺で検索」フローティングボタン -->
     <div id="search-area-container" class="pointer-events-auto flex justify-center hidden">
       <button 
         id="search-area-btn"
@@ -172,10 +178,53 @@
   </header>
 
   <!-- =============================== -->
+  <!-- リスト表示ビュー（フルスクリーンモーダル調） -->
+  <!-- =============================== -->
+  <div id="list-view-container" class="fixed inset-0 z-30 bg-zinc-950/95 backdrop-blur-2xl pt-44 pb-20 px-4 overflow-y-auto hidden">
+    <div class="max-w-md mx-auto flex flex-col gap-3">
+      
+      <!-- リスト用コントロール（ソート・絞り込み） -->
+      <div class="bg-zinc-900/80 border border-zinc-800 p-3 rounded-2xl flex flex-col gap-2.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-zinc-400 font-medium flex items-center gap-1">
+            <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span id="sort-label">並び替え</span>
+          </span>
+          <select 
+            id="list-sort-select"
+            class="bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+          >
+            <option value="dist_asc">距離: 近い順 (Nearest)</option>
+            <option value="dist_desc">距離: 遠い順 (Farthest)</option>
+            <option value="wheelchair_first">多目的/車椅子優先 (Accessible)</option>
+            <option value="free_first">無料優先 (Free first)</option>
+          </select>
+        </div>
+
+        <!-- チェックボックスフィルター -->
+        <div class="flex items-center gap-4 pt-2 border-t border-zinc-800 text-xs">
+          <label class="flex items-center gap-1.5 cursor-pointer text-zinc-300">
+            <input type="checkbox" id="filter-wheelchair" class="rounded border-zinc-700 bg-zinc-950 text-amber-500 accent-amber-500" />
+            <span id="filter-wheelchair-text">車椅子対応のみ</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer text-zinc-300">
+            <input type="checkbox" id="filter-free" class="rounded border-zinc-700 bg-zinc-950 text-amber-500 accent-amber-500" />
+            <span id="filter-free-text">無料のみ</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- リスト本体 -->
+      <div id="toilet-list-cards" class="flex flex-col gap-2.5 pb-6">
+        <!-- JSで動的生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================== -->
   <!-- フローティング右下アクションボタン群 -->
   <!-- =============================== -->
   <div class="fixed bottom-6 right-4 z-40 flex flex-col gap-2.5">
-    <!-- 現在地へジャンプボタン -->
     <button 
       id="locate-btn"
       type="button"
@@ -193,9 +242,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // ==========================================
-    // 多言語辞書 (i18n)
-    // ==========================================
     const I18N = {
       ja: {
         langToggle: "EN",
@@ -208,7 +254,7 @@
         searching: "トイレをスキャン中...",
         locating: "GPS測位中...",
         found: (count, rad) => `半径${rad}に ${count} 件発見`,
-        notFound: (query) => `「${query}」が見つかりませんでした。地名や都市名をご確認ください。`,
+        notFound: (query) => `「${query}」が見つかりませんでした。`,
         gpsDenied: "位置情報の取得が拒否されました",
         gpsUnsupported: "GPS非対応の端末です",
         networkError: "データ取得に失敗しました",
@@ -220,7 +266,14 @@
         fee: "利用料",
         free: "無料",
         paid: "有料",
-        navigate: "ルート案内 (Google Maps)"
+        navigate: "ルート案内 (Google Maps)",
+        walkMin: (m) => `徒歩 約${Math.max(1, Math.round(m / 80))}分`,
+        sortLabel: "並び替え:",
+        filterWheelchair: "車椅子対応のみ",
+        filterFree: "無料のみ",
+        noResults: "該当するトイレがありません",
+        viewMap: "MAP",
+        viewList: "LIST"
       },
       en: {
         langToggle: "JP",
@@ -233,7 +286,7 @@
         searching: "Scanning restrooms...",
         locating: "Acquiring GPS...",
         found: (count, rad) => `${count} restrooms in ${rad}`,
-        notFound: (query) => `Could not find "${query}". Please check the place name.`,
+        notFound: (query) => `Could not find "${query}".`,
         gpsDenied: "Location permission denied",
         gpsUnsupported: "Geolocation unsupported",
         networkError: "Failed to fetch data",
@@ -245,14 +298,24 @@
         fee: "Fee",
         free: "Free",
         paid: "Paid",
-        navigate: "Directions (Google Maps)"
+        navigate: "Directions (Google Maps)",
+        walkMin: (m) => `~${Math.max(1, Math.round(m / 80))} min walk`,
+        sortLabel: "Sort by:",
+        filterWheelchair: "Accessible only",
+        filterFree: "Free only",
+        noResults: "No restrooms found matching criteria",
+        viewMap: "MAP",
+        viewList: "LIST"
       }
     };
 
     let currentLang = 'ja';
     let currentRadius = 1000;
     let currentZoom = 15;
-    let currentCoords = { lat: 35.6812, lng: 139.7671 }; // 初期: 東京
+    let currentCoords = { lat: 35.6812, lng: 139.7671 };
+    let rawToiletsData = []; // 取得した全トイレデータ保持用
+    let markersMap = {};     // ID -> Leaflet Marker
+    let activeView = 'map';  // 'map' or 'list'
     let hasMovedManually = false;
 
     // 地図初期化
@@ -261,7 +324,6 @@
       attributionControl: false 
     }).setView([currentCoords.lat, currentCoords.lng], currentZoom);
 
-    // ダーク調タイルレイヤー
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       className: 'dark-map-tiles',
       maxZoom: 19
@@ -271,7 +333,7 @@
     let searchCircle = null;
     let toiletLayerGroup = L.layerGroup().addTo(map);
 
-    // DOM要素
+    // DOM参照
     const statusEl = document.getElementById('status');
     const targetLabelEl = document.getElementById('target-label');
     const searchForm = document.getElementById('search-form');
@@ -286,7 +348,35 @@
     const langLabel = document.getElementById('lang-label');
     const locateBtn = document.getElementById('locate-btn');
 
-    // UI言語更新
+    // リストビュー関連DOM
+    const listViewContainer = document.getElementById('list-view-container');
+    const viewMapBtn = document.getElementById('view-map-btn');
+    const viewListBtn = document.getElementById('view-list-btn');
+    const tabMapText = document.getElementById('tab-map-text');
+    const tabListText = document.getElementById('tab-list-text');
+    const listSortSelect = document.getElementById('list-sort-select');
+    const filterWheelchair = document.getElementById('filter-wheelchair');
+    const filterFree = document.getElementById('filter-free');
+    const toiletListCards = document.getElementById('toilet-list-cards');
+    const sortLabel = document.getElementById('sort-label');
+    const filterWheelchairText = document.getElementById('filter-wheelchair-text');
+    const filterFreeText = document.getElementById('filter-free-text');
+
+    // 2点間の距離計算 (Haversine formula, メートル)
+    function calcDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return Math.round(R * c);
+    }
+
+    // 言語適用
     function applyLanguage(lang) {
       currentLang = lang;
       const dict = I18N[lang];
@@ -295,18 +385,170 @@
       searchSubmitBtn.querySelector('span').textContent = dict.searchBtn;
       radiusLabel.textContent = dict.rangeLabel;
       searchAreaText.textContent = dict.searchArea;
+      tabMapText.textContent = dict.viewMap;
+      tabListText.textContent = dict.viewList;
+      sortLabel.textContent = dict.sortLabel;
+      filterWheelchairText.textContent = dict.filterWheelchair;
+      filterFreeText.textContent = dict.filterFree;
+
       if (centerMarker && centerMarker._isGPS) {
         targetLabelEl.textContent = dict.currentLocation;
       }
       lucide.createIcons();
+      renderListView();
     }
 
-    // Overpass APIからトイレ取得（全世界対応）
+    // ビュー切り替え（MAP ⇄ LIST）
+    function setViewMode(mode) {
+      activeView = mode;
+      if (mode === 'map') {
+        listViewContainer.classList.add('hidden');
+        viewMapBtn.className = "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all bg-amber-500 text-zinc-950 shadow";
+        viewListBtn.className = "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all text-zinc-400 hover:text-zinc-200";
+        setTimeout(() => map.invalidateSize(), 100);
+      } else {
+        listViewContainer.classList.remove('hidden');
+        viewListBtn.className = "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all bg-amber-500 text-zinc-950 shadow";
+        viewMapBtn.className = "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all text-zinc-400 hover:text-zinc-200";
+        renderListView();
+      }
+    }
+
+    // リストの描画 & ソート・フィルター処理
+    function renderListView() {
+      const dict = I18N[currentLang];
+      toiletListCards.innerHTML = '';
+
+      if (rawToiletsData.length === 0) {
+        toiletListCards.innerHTML = `
+          <div class="p-8 text-center bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+            ${dict.noResults}
+          </div>
+        `;
+        return;
+      }
+
+      // 距離を付与
+      let items = rawToiletsData.map(item => {
+        const dist = calcDistance(currentCoords.lat, currentCoords.lng, item.lat, item.lon);
+        return { ...item, distance: dist };
+      });
+
+      // フィルター適用
+      if (filterWheelchair.checked) {
+        items = items.filter(i => (i.tags?.wheelchair === 'yes'));
+      }
+      if (filterFree.checked) {
+        items = items.filter(i => (i.tags?.fee !== 'yes'));
+      }
+
+      // ソート適用
+      const sortType = listSortSelect.value;
+      if (sortType === 'dist_asc') {
+        items.sort((a, b) => a.distance - b.distance);
+      } else if (sortType === 'dist_desc') {
+        items.sort((a, b) => b.distance - a.distance);
+      } else if (sortType === 'wheelchair_first') {
+        items.sort((a, b) => {
+          const aW = a.tags?.wheelchair === 'yes' ? 1 : 0;
+          const bW = b.tags?.wheelchair === 'yes' ? 1 : 0;
+          return bW - aW || a.distance - b.distance;
+        });
+      } else if (sortType === 'free_first') {
+        items.sort((a, b) => {
+          const aF = a.tags?.fee === 'yes' ? 0 : 1;
+          const bF = b.tags?.fee === 'yes' ? 0 : 1;
+          return bF - aF || a.distance - b.distance;
+        });
+      }
+
+      if (items.length === 0) {
+        toiletListCards.innerHTML = `
+          <div class="p-8 text-center bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+            ${dict.noResults}
+          </div>
+        `;
+        return;
+      }
+
+      // カード要素の作成
+      items.forEach((item, index) => {
+        const tags = item.tags || {};
+        const isWheelchair = tags.wheelchair === 'yes';
+        const isPaid = tags.fee === 'yes';
+        const name = tags.name || `${dict.popupTitle} #${index + 1}`;
+        const distStr = item.distance >= 1000 ? `${(item.distance / 1000).toFixed(1)}km` : `${item.distance}m`;
+
+        const card = document.createElement('div');
+        card.className = "bg-zinc-900/80 border border-zinc-800/80 hover:border-amber-400/50 p-3.5 rounded-2xl flex flex-col gap-2.5 transition-all cursor-pointer active:scale-[0.99] shadow-lg";
+        
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-sm">
+                🚻
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-zinc-100 line-clamp-1">${name}</h4>
+                <div class="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                  <span class="text-amber-400 font-bold">${distStr}</span>
+                  <span>•</span>
+                  <span>${dict.walkMin(item.distance)}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- バッジ群 -->
+            <div class="flex flex-col items-end gap-1">
+              <span class="text-[9px] px-2 py-0.5 rounded-full font-bold border ${isPaid ? 'bg-rose-950/40 border-rose-500/40 text-rose-400' : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'}">
+                ${isPaid ? dict.paid : dict.free}
+              </span>
+              ${isWheelchair ? `
+                <span class="text-[9px] px-2 py-0.5 rounded-full font-bold bg-sky-950/40 border border-sky-500/40 text-sky-400">
+                  ♿ ${dict.yes}
+                </span>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-zinc-800/60">
+            <span class="text-[10px] text-zinc-500">タップして地図で確認</span>
+            <a 
+              href="https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}" 
+              target="_blank" 
+              onclick="event.stopPropagation();"
+              class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold text-[10px] flex items-center gap-1 shadow-md shadow-amber-500/20"
+            >
+              <span>${dict.navigate}</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </a>
+          </div>
+        `;
+
+        // カードクリック時: マップに切り替えてピンへズーム
+        card.addEventListener('click', () => {
+          setViewMode('map');
+          map.setView([item.lat, item.lon], 17);
+          const marker = markersMap[item.id];
+          if (marker) {
+            setTimeout(() => marker.openPopup(), 200);
+          }
+        });
+
+        toiletListCards.appendChild(card);
+      });
+
+      lucide.createIcons({ root: toiletListCards });
+    }
+
+    // Overpass APIからトイレ取得
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
       toiletLayerGroup.clearLayers();
-      searchAreaContainer.classList.add('hidden'); // 検索完了したらエリア検索ボタンは隠す
+      markersMap = {};
+      rawToiletsData = [];
+      searchAreaContainer.classList.add('hidden');
 
       const query = `
         [out:json][timeout:15];
@@ -333,14 +575,23 @@
           const itemLng = item.lon || (item.center && item.center.lon);
           if (!itemLat || !itemLng) return;
 
-          const tags = item.tags || {};
+          const toiletObj = {
+            id: item.id,
+            lat: itemLat,
+            lon: itemLng,
+            tags: item.tags || {}
+          };
+          rawToiletsData.push(toiletObj);
+
+          const tags = toiletObj.tags;
           let isWheelchair = dict.unknown;
           if (tags.wheelchair === 'yes') isWheelchair = dict.yes;
           else if (tags.wheelchair === 'no') isWheelchair = dict.no;
 
-          const fee = tags.fee === 'yes' ? dict.paid : (tags.fee === 'no' ? dict.free : dict.free);
+          const fee = tags.fee === 'yes' ? dict.paid : dict.free;
+          const dist = calcDistance(currentCoords.lat, currentCoords.lng, itemLat, itemLng);
+          const distStr = dist >= 1000 ? `${(dist / 1000).toFixed(1)}km` : `${dist}m`;
 
-          // 高級感のあるカスタムピン（HTMLマーカー）
           const customIcon = L.divIcon({
             className: 'custom-toilet-icon',
             html: `
@@ -363,7 +614,7 @@
                 </div>
                 <div>
                   <h4 class="text-xs font-bold text-zinc-100">${tags.name || dict.popupTitle}</h4>
-                  <p class="text-[10px] text-zinc-400">${fee}</p>
+                  <p class="text-[10px] text-zinc-400">${distStr} (${dict.walkMin(dist)})</p>
                 </div>
               </div>
 
@@ -372,18 +623,26 @@
                   <span class="text-zinc-500">${dict.wheelchair}:</span>
                   <span class="font-semibold text-zinc-200">${isWheelchair}</span>
                 </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500">${dict.fee}:</span>
+                  <span class="font-semibold text-zinc-200">${fee}</span>
+                </div>
               </div>
 
               <a href="https://www.google.com/maps/dir/?api=1&destination=${itemLat},${itemLng}" 
                  target="_blank" 
-                 class="mt-1 flex items-center justify-center gap-1.5 w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-[11px] rounded-xl shadow-md shadow-amber-500/20 transition-all">
+                 class="mt-1 flex items-center justify-center gap-1.5 w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold text-[11px] rounded-xl shadow-md shadow-amber-500/20 transition-all">
                 <span>${dict.navigate}</span>
               </a>
             </div>
           `);
 
           toiletLayerGroup.addLayer(marker);
+          markersMap[item.id] = marker;
         });
+
+        // リスト画面も更新
+        renderListView();
 
       } catch (err) {
         statusEl.textContent = dict.networkError;
@@ -391,14 +650,13 @@
       }
     }
 
-    // 中心座標・サークルの再描画
+    // 中心更新
     function updateCenter(lat, lng, labelText, isGPS = false) {
       currentCoords = { lat, lng };
       targetLabelEl.textContent = labelText;
 
       map.setView([lat, lng], currentZoom);
 
-      // 中心マーカー
       if (centerMarker) {
         centerMarker.setLatLng([lat, lng]);
       } else {
@@ -413,7 +671,6 @@
       centerMarker._isGPS = isGPS;
       centerMarker.setStyle({ fillColor: isGPS ? '#3b82f6' : '#ef4444' });
 
-      // 範囲レーダー円
       if (searchCircle) {
         searchCircle.setLatLng([lat, lng]).setRadius(currentRadius);
       } else {
@@ -430,23 +687,16 @@
       fetchToilets(lat, lng, currentRadius);
     }
 
-    // ★ 地図移動イベント：ユーザーが地図を動かしたら「この周辺で検索」ボタンを表示
-    map.on('movestart', () => {
-      hasMovedManually = true;
-    });
-
+    // 地図移動検知
+    map.on('movestart', () => { hasMovedManually = true; });
     map.on('moveend', () => {
-      if (hasMovedManually) {
+      if (hasMovedManually && activeView === 'map') {
         const center = map.getCenter();
         const dist = map.distance([currentCoords.lat, currentCoords.lng], center);
-        // 現在の検索中心から150m以上移動していたらボタンを表示
-        if (dist > 150) {
-          searchAreaContainer.classList.remove('hidden');
-        }
+        if (dist > 150) searchAreaContainer.classList.remove('hidden');
       }
     });
 
-    // 「この周辺で検索」ボタンの実行
     searchAreaBtn.addEventListener('click', () => {
       const center = map.getCenter();
       const dict = I18N[currentLang];
@@ -454,13 +704,13 @@
       hasMovedManually = false;
     });
 
-    // 半径切り替え
+    // 半径変更
     radiusButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         radiusButtons.forEach(b => {
-          b.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60 hover:text-zinc-200';
+          b.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all text-zinc-400 border-zinc-800 bg-zinc-950/60';
         });
-        btn.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md shadow-amber-500/20';
+        btn.className = 'radius-btn py-1 text-[11px] rounded-lg font-bold border transition-all bg-amber-500 text-zinc-950 border-amber-400 shadow-md';
 
         currentRadius = parseInt(btn.dataset.radius);
         currentZoom = parseInt(btn.dataset.zoom);
@@ -471,7 +721,7 @@
       });
     });
 
-    // 世界地名検索 (Nominatim: countrycodesの制限なし)
+    // 地名検索
     async function searchPlace(query) {
       if (!query.trim()) return;
       const dict = I18N[currentLang];
@@ -488,41 +738,32 @@
         }
 
         const item = data[0];
-        const lat = parseFloat(item.lat);
-        const lng = parseFloat(item.lon);
-        const displayName = item.display_name.split(',')[0];
-
         hasMovedManually = false;
-        updateCenter(lat, lng, displayName, false);
+        updateCenter(parseFloat(item.lat), parseFloat(item.lon), item.display_name.split(',')[0], false);
       } catch (err) {
         statusEl.textContent = dict.networkError;
-        console.error(err);
       }
     }
 
-    // GPS測位
+    // GPS取得
     function locateUser() {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.locating;
-
       if (!navigator.geolocation) {
         statusEl.textContent = dict.gpsUnsupported;
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           hasMovedManually = false;
           updateCenter(pos.coords.latitude, pos.coords.longitude, dict.currentLocation, true);
         },
-        (err) => {
-          statusEl.textContent = dict.gpsDenied;
-        },
+        (err) => { statusEl.textContent = dict.gpsDenied; },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
 
-    // イベントバインド
+    // イベントリスナー登録
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const val = searchInput.value.trim();
@@ -530,14 +771,18 @@
     });
 
     locateBtn.addEventListener('click', locateUser);
+    viewMapBtn.addEventListener('click', () => setViewMode('map'));
+    viewListBtn.addEventListener('click', () => setViewMode('list'));
+    listSortSelect.addEventListener('change', renderListView);
+    filterWheelchair.addEventListener('change', renderListView);
+    filterFree.addEventListener('change', renderListView);
 
     langToggleBtn.addEventListener('click', () => {
       applyLanguage(currentLang === 'ja' ? 'en' : 'ja');
-      // 再描画
       fetchToilets(currentCoords.lat, currentCoords.lng, currentRadius);
     });
 
-    // 初期起動
+    // 起動
     lucide.createIcons();
     applyLanguage('ja');
     locateUser();
