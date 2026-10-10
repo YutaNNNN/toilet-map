@@ -31,7 +31,6 @@
       background: #e2e8f0;
       z-index: 1;
     }
-    /* 明るく清潔感のあるポップアップスタイル */
     .leaflet-popup-content-wrapper {
       background: rgba(255, 255, 255, 0.98) !important;
       backdrop-filter: blur(12px) !important;
@@ -63,7 +62,7 @@
   <!-- =============================== -->
   <header class="fixed top-3 inset-x-3 sm:inset-x-auto sm:left-4 sm:right-4 sm:max-w-md sm:mx-auto z-40 flex flex-col gap-2 pointer-events-none">
     
-    <!-- 操作カード（ホワイト・グラス調） -->
+    <!-- 操作カード -->
     <div class="pointer-events-auto bg-white/90 backdrop-blur-xl border border-slate-200/90 p-3.5 rounded-2xl shadow-xl shadow-slate-200/70 flex flex-col gap-2.5">
       
       <!-- タイトル & ビュー切替 & 言語トグル -->
@@ -178,7 +177,7 @@
   </header>
 
   <!-- =============================== -->
-  <!-- リスト表示ビュー（ライト仕様） -->
+  <!-- リスト表示ビュー -->
   <!-- =============================== -->
   <div id="list-view-container" class="fixed inset-0 z-30 bg-slate-50/95 backdrop-blur-xl pt-44 pb-20 px-4 overflow-y-auto hidden">
     <div class="max-w-md mx-auto flex flex-col gap-3">
@@ -249,7 +248,7 @@
         searchArea: "この周辺で検索",
         currentLocation: "現在地周辺",
         customLocation: "指定エリア",
-        searching: "トイレを高速スキャン中...",
+        searching: "トイレをスキャン中...",
         locating: "GPS測位中...",
         found: (count, rad) => `半径${rad}に ${count} 件発見`,
         notFound: (query) => `「${query}」が見つかりませんでした。`,
@@ -315,9 +314,16 @@
     let markersMap = {};
     let activeView = 'map';
     let hasMovedManually = false;
-    let abortController = null; // 以前のリクエストをキャンセルして高速化
+    let abortController = null;
 
-    // 地図初期化（標準の明るい地図）
+    // Overpass APIのミラーサーバー一覧
+    const OVERPASS_ENDPOINTS = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+    ];
+
+    // 地図初期化
     const map = L.map('map', { 
       zoomControl: false,
       attributionControl: false 
@@ -359,7 +365,7 @@
     const filterWheelchairText = document.getElementById('filter-wheelchair-text');
     const filterFreeText = document.getElementById('filter-free-text');
 
-    // 2点間の距離計算 (m)
+    // 距離計算 (m)
     function calcDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const φ1 = lat1 * Math.PI / 180;
@@ -532,7 +538,7 @@
       lucide.createIcons({ root: toiletListCards });
     }
 
-    // ★ 高速化されたOverpass API取得処理
+    // トイレデータ取得（フォールバック対応 & 構文正常化）
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
@@ -541,112 +547,122 @@
       rawToiletsData = [];
       searchAreaContainer.classList.add('hidden');
 
-      // 以前の進行中リクエストがあれば中断して高速化
       if (abortController) {
         abortController.abort();
       }
       abortController = new AbortController();
 
-      // クエリ最適化: 必要最小限のタグと座標のみ出力してサーバー負荷と通信量を激減
+      // 正しい構文: out center qt;
       const query = `
-        [out:json][timeout:10];
+        [out:json][timeout:15];
         (
           node["amenity"="toilets"](around:${radius}, ${lat}, ${lng});
           way["amenity"="toilets"](around:${radius}, ${lat}, ${lng});
         );
-        out center body qt;
+        out center qt;
       `;
 
-      try {
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          body: query,
-          signal: abortController.signal
-        });
-        const data = await res.json();
-        const elements = data.elements || [];
+      let success = false;
 
-        const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
-        statusEl.textContent = dict.found(elements.length, radiusStr);
-
-        elements.forEach(item => {
-          const itemLat = item.lat || (item.center && item.center.lat);
-          const itemLng = item.lon || (item.center && item.center.lon);
-          if (!itemLat || !itemLng) return;
-
-          const toiletObj = {
-            id: item.id,
-            lat: itemLat,
-            lon: itemLng,
-            tags: item.tags || {}
-          };
-          rawToiletsData.push(toiletObj);
-
-          const tags = toiletObj.tags;
-          let isWheelchair = dict.unknown;
-          if (tags.wheelchair === 'yes') isWheelchair = dict.yes;
-          else if (tags.wheelchair === 'no') isWheelchair = dict.no;
-
-          const fee = tags.fee === 'yes' ? dict.paid : dict.free;
-          const dist = calcDistance(currentCoords.lat, currentCoords.lng, itemLat, itemLng);
-          const distStr = dist >= 1000 ? `${(dist / 1000).toFixed(1)}km` : `${dist}m`;
-
-          // 明るく視認性の高いカスタムピン（爽やかなブルー）
-          const customIcon = L.divIcon({
-            className: 'custom-toilet-icon',
-            html: `
-              <div class="w-8 h-8 rounded-full bg-white border-2 border-sky-500 shadow-md flex items-center justify-center hover:scale-110 active:scale-95 transition-transform">
-                <span class="text-sm">🚻</span>
-              </div>
-            `,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popupAnchor: [0, -18]
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(query),
+            signal: abortController.signal
           });
 
-          const marker = L.marker([itemLat, itemLng], { icon: customIcon });
+          if (!res.ok) continue;
 
-          marker.bindPopup(`
-            <div class="p-4 flex flex-col gap-2.5 min-w-[210px]">
-              <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <div class="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-xs border border-sky-200">
-                  🚻
+          const data = await res.json();
+          const elements = data.elements || [];
+
+          const radiusStr = radius >= 1000 ? `${radius / 1000}km` : `${radius}m`;
+          statusEl.textContent = dict.found(elements.length, radiusStr);
+
+          elements.forEach(item => {
+            const itemLat = item.lat || (item.center && item.center.lat);
+            const itemLng = item.lon || (item.center && item.center.lon);
+            if (!itemLat || !itemLng) return;
+
+            const toiletObj = {
+              id: item.id,
+              lat: itemLat,
+              lon: itemLng,
+              tags: item.tags || {}
+            };
+            rawToiletsData.push(toiletObj);
+
+            const tags = toiletObj.tags;
+            let isWheelchair = dict.unknown;
+            if (tags.wheelchair === 'yes') isWheelchair = dict.yes;
+            else if (tags.wheelchair === 'no') isWheelchair = dict.no;
+
+            const fee = tags.fee === 'yes' ? dict.paid : dict.free;
+            const dist = calcDistance(currentCoords.lat, currentCoords.lng, itemLat, itemLng);
+            const distStr = dist >= 1000 ? `${(dist / 1000).toFixed(1)}km` : `${dist}m`;
+
+            const customIcon = L.divIcon({
+              className: 'custom-toilet-icon',
+              html: `
+                <div class="w-8 h-8 rounded-full bg-white border-2 border-sky-500 shadow-md flex items-center justify-center hover:scale-110 active:scale-95 transition-transform">
+                  <span class="text-sm">🚻</span>
                 </div>
-                <div>
-                  <h4 class="text-xs font-bold text-slate-900">${tags.name || dict.popupTitle}</h4>
-                  <p class="text-[10px] text-slate-500">${distStr} (${dict.walkMin(dist)})</p>
+              `,
+              iconSize: [32, 32],
+              iconAnchor: [16, 16],
+              popupAnchor: [0, -18]
+            });
+
+            const marker = L.marker([itemLat, itemLng], { icon: customIcon });
+
+            marker.bindPopup(`
+              <div class="p-4 flex flex-col gap-2.5 min-w-[210px]">
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <div class="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-xs border border-sky-200">
+                    🚻
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold text-slate-900">${tags.name || dict.popupTitle}</h4>
+                    <p class="text-[10px] text-slate-500">${distStr} (${dict.walkMin(dist)})</p>
+                  </div>
                 </div>
+
+                <div class="text-[11px] space-y-1 text-slate-600">
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">${dict.wheelchair}:</span>
+                    <span class="font-bold text-slate-800">${isWheelchair}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">${dict.fee}:</span>
+                    <span class="font-bold text-slate-800">${fee}</span>
+                  </div>
+                </div>
+
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${itemLat},${itemLng}" 
+                   target="_blank" 
+                   class="mt-1 flex items-center justify-center gap-1.5 w-full py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 text-white font-bold text-[11px] rounded-xl shadow-md shadow-sky-500/20 transition-all">
+                  <span>${dict.navigate}</span>
+                </a>
               </div>
+            `);
 
-              <div class="text-[11px] space-y-1 text-slate-600">
-                <div class="flex justify-between">
-                  <span class="text-slate-400">${dict.wheelchair}:</span>
-                  <span class="font-bold text-slate-800">${isWheelchair}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-400">${dict.fee}:</span>
-                  <span class="font-bold text-slate-800">${fee}</span>
-                </div>
-              </div>
+            toiletLayerGroup.addLayer(marker);
+            markersMap[item.id] = marker;
+          });
 
-              <a href="https://www.google.com/maps/dir/?api=1&destination=${itemLat},${itemLng}" 
-                 target="_blank" 
-                 class="mt-1 flex items-center justify-center gap-1.5 w-full py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 text-white font-bold text-[11px] rounded-xl shadow-md shadow-sky-500/20 transition-all">
-                <span>${dict.navigate}</span>
-              </a>
-            </div>
-          `);
+          renderListView();
+          success = true;
+          break;
 
-          toiletLayerGroup.addLayer(marker);
-          markersMap[item.id] = marker;
-        });
-
-        renderListView();
-
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          statusEl.textContent = dict.networkError;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
         }
+      }
+
+      if (!success) {
+        statusEl.textContent = dict.networkError;
       }
     }
 
@@ -671,7 +687,6 @@
       centerMarker._isGPS = isGPS;
       centerMarker.setStyle({ fillColor: isGPS ? '#0284c7' : '#ef4444' });
 
-      // 明るいブルーの範囲サークル
       if (searchCircle) {
         searchCircle.setLatLng([lat, lng]).setRadius(currentRadius);
       } else {
@@ -764,13 +779,10 @@
       );
     }
 
-    // ★ 検索フォーム送信イベント（エンター時に即キーボードを閉じる）
+    // 検索フォーム送信イベント（エンター時にキーボードを閉じる）
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      
-      // スマホのソフトキーボードを下げる
       searchInput.blur();
-
       const val = searchInput.value.trim();
       if (val) searchPlace(val);
     });
