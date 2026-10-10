@@ -211,7 +211,7 @@
       if (!query.trim()) return;
       statusEl.textContent = '場所を特定中...';
 
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=jp&limit=1`;
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
       try {
         const res = await fetch(url, { headers: { 'Accept-Language': 'ja' } });
         const data = await res.json();
