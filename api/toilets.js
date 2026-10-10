@@ -14,34 +14,41 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing parameters' });
   }
 
-  // サーバー側で最も負荷が少なく高速に通る構文
-  const query = `[out:json][timeout:10];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
+  // node（点）と way（駅・建物内）の両方を網羅する完全クエリ
+  const query = `
+    [out:json][timeout:10];
+    (
+      node["amenity"="toilets"](around:${radius},${lat},${lng});
+      way["amenity"="toilets"](around:${radius},${lat},${lng});
+    );
+    out center qt;
+  `;
 
   const endpoints = [
     'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://lz4.overpass-api.de/api/interpreter'
+    'https://lz4.overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
   ];
 
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'User-Agent': 'RESTSTOP-Radar/1.0'
-        },
-        body: new URLSearchParams({ data: query }).toString()
-      });
+  // 複数サーバーに同時リクエストし、最速で返ってきた結果を採用（Fastest-Wins）
+  const fetchPromises = endpoints.map(url =>
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'User-Agent': 'RESTSTOP-Radar/1.0'
+      },
+      body: new URLSearchParams({ data: query }).toString()
+    }).then(async response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    })
+  );
 
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      return res.status(200).json(data);
-    } catch (err) {
-      // 次のミラーサーバーへフォールバック
-    }
+  try {
+    const data = await Promise.any(fetchPromises);
+    return res.status(200).json(data);
+  } catch (err) {
+    return res.status(502).json({ error: 'All Overpass gateways timed out or failed' });
   }
-
-  return res.status(502).json({ error: 'All Overpass servers failed' });
 }
