@@ -316,11 +316,11 @@
     let hasMovedManually = false;
     let abortController = null;
 
-    // CORS制限がなく確実に通るエンドポイント
+    // 稼働実績の高いパブリックエンドポイント一覧
     const OVERPASS_ENDPOINTS = [
       'https://overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter',
-      'https://overpass.private.coffee/api/interpreter'
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://z.overpass-api.de/api/interpreter'
     ];
 
     const toiletCache = new Map();
@@ -613,7 +613,7 @@
       renderListView();
     }
 
-    // 確実なフォールバック付き取得処理
+    // GETリクエスト＋安全リトライ処理
     async function fetchToilets(lat, lng, radius) {
       const dict = I18N[currentLang];
       statusEl.textContent = dict.searching;
@@ -633,19 +633,18 @@
       }
       abortController = new AbortController();
 
-      // 標準クエリ (タイムアウト10秒)
-      const query = `[out:json][timeout:10];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
-      const encodedBody = 'data=' + encodeURIComponent(query);
+      // 改行・余白を除去した最小限のクエリ
+      const query = `[out:json][timeout:15];node["amenity"="toilets"](around:${radius},${lat},${lng});out;`;
+      const urlQuery = encodeURIComponent(query);
 
       let success = false;
 
-      // 安定したサーバー順にフォールバックしながら試行
       for (const endpoint of OVERPASS_ENDPOINTS) {
         try {
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: encodedBody,
+          // キャッシュが効きやすくCORS拒否の少ないGET送信
+          const targetUrl = `${endpoint}?data=${urlQuery}`;
+          const res = await fetch(targetUrl, {
+            method: 'GET',
             signal: abortController.signal
           });
 
@@ -657,7 +656,7 @@
           toiletCache.set(cacheKey, elements);
           renderToiletMarkers(elements, radius);
           success = true;
-          break; // 成功したら抜ける
+          break;
         } catch (err) {
           if (err.name === 'AbortError') return;
         }
